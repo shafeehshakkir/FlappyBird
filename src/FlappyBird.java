@@ -13,6 +13,7 @@ public class FlappyBird extends JPanel implements ActionListener, KeyListener{
     Image birdImg;
     Image topPipeImg;
     Image bottomPipeImg;
+    Image gameOverImg;
 
     //Bird
     int birdx= boardWidth/8;
@@ -87,6 +88,7 @@ public class FlappyBird extends JPanel implements ActionListener, KeyListener{
         birdImg=new ImageIcon(getClass().getResource("./flappybird.png")).getImage();
         topPipeImg=new ImageIcon(getClass().getResource("./toppipe.png")).getImage();
         bottomPipeImg=new ImageIcon(getClass().getResource("./bottompipe.png")).getImage();
+        gameOverImg=new ImageIcon(getClass().getResource("./gameover.png")).getImage();
         //bird
         bird =new Bird(birdImg);
         pipes= new ArrayList<Pipe>();
@@ -134,9 +136,23 @@ public class FlappyBird extends JPanel implements ActionListener, KeyListener{
         }
         //score
         g.setColor(Color.white);
-        g.setFont(new Font("Arial",Font.PLAIN,32));
+        g.setFont(new Font("Arial",Font.PLAIN,28));
         if(gameOver) {
-            g.drawString("Game Over: " + String.valueOf((int) score),10,35);
+            double scale=0.1;
+
+            int scaledWidth=(int)(gameOverImg.getWidth(null)*scale);
+            int scaledHeight=(int)(gameOverImg.getHeight(null)*scale);
+
+            int x=(boardWidth-scaledWidth)/2;
+            int y=(boardHeight-scaledHeight)/2;
+
+            g.drawImage(gameOverImg,x,y,scaledWidth,scaledHeight,null);
+            String scoreText="Score: " + (int)score;
+
+            FontMetrics fm=g.getFontMetrics();
+            int textX=(boardWidth-fm.stringWidth(scoreText))/2;
+            int textY=y+scaledHeight;
+            g.drawString(scoreText,textX,textY);
         }
         else {
             g.drawString(String.valueOf((int)score),10,35);
