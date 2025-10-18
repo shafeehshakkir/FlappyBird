@@ -190,13 +190,33 @@ public class FlappyBird extends JPanel implements ActionListener, KeyListener {
     }
 
     private void saveScoreToDatabase() {
-        // Save player's name and score to the database
         try (Connection conn = DriverManager.getConnection(DB_URL, DB_USER, DB_PASSWORD)) {
-            String insertSQL = "INSERT INTO leaderboard (player_name, score) VALUES (?, ?)";
-            try (PreparedStatement pstmt = conn.prepareStatement(insertSQL)) {
-                pstmt.setString(1, playerName);
-                pstmt.setInt(2, (int) score);
-                pstmt.executeUpdate();
+            // Check if player already exists
+            String selectSQL = "SELECT score FROM leaderboard WHERE player_name = ?";
+            try (PreparedStatement selectStmt = conn.prepareStatement(selectSQL)) {
+                selectStmt.setString(1, playerName);
+                ResultSet rs = selectStmt.executeQuery();
+
+                if (rs.next()) {
+                    int existingScore = rs.getInt("score");
+                    // Update score if new score is higher
+                    if ((int) score > existingScore) {
+                        String updateSQL = "UPDATE leaderboard SET score = ? WHERE player_name = ?";
+                        try (PreparedStatement updateStmt = conn.prepareStatement(updateSQL)) {
+                            updateStmt.setInt(1, (int) score);
+                            updateStmt.setString(2, playerName);
+                            updateStmt.executeUpdate();
+                        }
+                    }
+                } else {
+                    // Insert new player record
+                    String insertSQL = "INSERT INTO leaderboard (player_name, score) VALUES (?, ?)";
+                    try (PreparedStatement insertStmt = conn.prepareStatement(insertSQL)) {
+                        insertStmt.setString(1, playerName);
+                        insertStmt.setInt(2, (int) score);
+                        insertStmt.executeUpdate();
+                    }
+                }
             }
         } catch (SQLException e) {
             e.printStackTrace();
