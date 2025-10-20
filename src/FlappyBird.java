@@ -1,28 +1,25 @@
 import java.awt.*;
 import java.awt.event.*;
 import java.sql.*;
-import java.util.ArrayList; // used for storing pipes
-import java.util.Random; // used for placing pipes at random position
+import java.util.ArrayList;
+import java.util.Random;
 import javax.swing.*;
 
 public class FlappyBird extends JPanel implements ActionListener, KeyListener {
     int boardWidth = 360;
     int boardHeight = 640;
 
-    // images .. these 4 are variables which stores images
     Image backgroundImg;
     Image birdImg;
     Image topPipeImg;
     Image bottomPipeImg;
     Image gameOverImg;
 
-    // Bird
     int birdx = boardWidth / 8;
     int birdy = boardHeight / 2;
     int birdWidth = 34;
     int birdHeight = 24;
 
-    // Bird class
     class Bird {
         int x = birdx;
         int y = birdy;
@@ -35,7 +32,6 @@ public class FlappyBird extends JPanel implements ActionListener, KeyListener {
         }
     }
 
-    // Pipes
     int pipeX = boardWidth;
     int pipeY = 0;
     int pipeWidth = 64;
@@ -54,9 +50,8 @@ public class FlappyBird extends JPanel implements ActionListener, KeyListener {
         }
     }
 
-    // Game logic variables
     Bird bird;
-    int velocityX = -4; // the pipes moves to the left
+    int velocityX = -4;
     int velocityY = 0;
     int gravity = 1;
 
@@ -68,40 +63,27 @@ public class FlappyBird extends JPanel implements ActionListener, KeyListener {
     boolean gameOver = false;
     double score = 0;
 
-    String playerName;
+    private final Database.User user;
 
-    final String DB_URL = "jdbc:mysql://localhost:3306/flappydb";
-    final String DB_USER = "jcnoe";
-    final String DB_PASSWORD = "Shafeeh@585";
-
-    public FlappyBird(String playerName) {
-        this.playerName = playerName;
+    public FlappyBird(Database.User user) {
+        this.user = user;
 
         setPreferredSize(new Dimension(boardWidth, boardHeight));
-        setFocusable(true); // checks if this is the class which gets the key events
+        setFocusable(true);
         addKeyListener(this);
 
-        // loading images...
-        backgroundImg = new ImageIcon(getClass().getResource("./flappybirdbg.png")).getImage();
-        birdImg = new ImageIcon(getClass().getResource("./flappybird.png")).getImage();
-        topPipeImg = new ImageIcon(getClass().getResource("./toppipe.png")).getImage();
-        bottomPipeImg = new ImageIcon(getClass().getResource("./bottompipe.png")).getImage();
-        gameOverImg = new ImageIcon(getClass().getResource("./gameover.png")).getImage();
+        backgroundImg = new ImageIcon(getClass().getResource("/flappybirdbg.png")).getImage();
+        birdImg = new ImageIcon(getClass().getResource("/flappybird.png")).getImage();
+        topPipeImg = new ImageIcon(getClass().getResource("/toppipe.png")).getImage();
+        bottomPipeImg = new ImageIcon(getClass().getResource("/bottompipe.png")).getImage();
+        gameOverImg = new ImageIcon(getClass().getResource("/gameover.png")).getImage();
 
-        // bird
         bird = new Bird(birdImg);
-        pipes = new ArrayList<Pipe>();
+        pipes = new ArrayList<>();
 
-        // place pipes timer
-        placePipesTimer = new Timer(1500, new ActionListener() {
-            @Override
-            public void actionPerformed(ActionEvent e) {
-                placePipes();
-            }
-        });
+        placePipesTimer = new Timer(1500, e -> placePipes());
         placePipesTimer.start();
 
-        // game timer
         gameLoop = new Timer(1000 / 60, this);
         gameLoop.start();
     }
@@ -124,16 +106,11 @@ public class FlappyBird extends JPanel implements ActionListener, KeyListener {
     }
 
     public void draw(Graphics g) {
-        // background
         g.drawImage(backgroundImg, 0, 0, boardWidth, boardHeight, null);
-        // bird
         g.drawImage(bird.img, bird.x, bird.y, bird.width, bird.height, null);
-        // pipes
-        for (int i = 0; i < pipes.size(); i++) {
-            Pipe pipe = pipes.get(i);
+        for (Pipe pipe : pipes) {
             g.drawImage(pipe.img, pipe.x, pipe.y, pipe.width, pipe.height, null);
         }
-        // score
         g.setColor(Color.white);
         g.setFont(new Font("Arial", Font.PLAIN, 28));
         if (gameOver) {
@@ -158,14 +135,11 @@ public class FlappyBird extends JPanel implements ActionListener, KeyListener {
     }
 
     public void move() {
-        // bird movement and gravity
         velocityY += gravity;
         bird.y += velocityY;
         bird.y = Math.max(bird.y, 0);
 
-        // pipes movement and scoring
-        for (int i = 0; i < pipes.size(); i++) {
-            Pipe pipe = pipes.get(i);
+        for (Pipe pipe : pipes) {
             pipe.x += velocityX;
 
             if (!pipe.passed && bird.x > pipe.x + pipe.width) {
@@ -190,39 +164,12 @@ public class FlappyBird extends JPanel implements ActionListener, KeyListener {
     }
 
     private void saveScoreToDatabase() {
-        // Save player's name and score to the database
-        try (Connection conn = DriverManager.getConnection(DB_URL, DB_USER, DB_PASSWORD)) {
-            String insertSQL = "INSERT INTO leaderboard (player_name, score) VALUES (?, ?)";
-            try (PreparedStatement pstmt = conn.prepareStatement(insertSQL)) {
-                pstmt.setString(1, playerName);
-                pstmt.setInt(2, (int) score);
-                pstmt.executeUpdate();
-            }
+        try {
+            Database.saveOrUpdateScore(user.id, (int) score);
         } catch (SQLException e) {
             e.printStackTrace();
             JOptionPane.showMessageDialog(this, "Error saving score to database: " + e.getMessage());
         }
-    }
-
-    private String fetchLeaderboard() {
-        // Fetch top 10 scores from the leaderboard table
-        StringBuilder leaderboardText = new StringBuilder("<html><h2>Leaderboard</h2><ol>");
-        try (Connection conn = DriverManager.getConnection(DB_URL, DB_USER, DB_PASSWORD)) {
-            String querySQL = "SELECT player_name, score FROM leaderboard ORDER BY score DESC LIMIT 10";
-            try (PreparedStatement pstmt = conn.prepareStatement(querySQL)) {
-                ResultSet rs = pstmt.executeQuery();
-                while (rs.next()) {
-                    String name = rs.getString("player_name");
-                    int scr = rs.getInt("score");
-                    leaderboardText.append("<li>").append(name).append(" - ").append(scr).append("</li>");
-                }
-            }
-        } catch (SQLException e) {
-            e.printStackTrace();
-            leaderboardText.append("Error fetching leaderboard");
-        }
-        leaderboardText.append("</ol></html>");
-        return leaderboardText.toString();
     }
 
     @Override
@@ -234,10 +181,22 @@ public class FlappyBird extends JPanel implements ActionListener, KeyListener {
             placePipesTimer.stop();
             gameLoop.stop();
 
-            // Save score and show leaderboard
             saveScoreToDatabase();
-            String leaderboard = fetchLeaderboard();
-            JOptionPane.showMessageDialog(this, leaderboard, "Game Over - Leaderboard", JOptionPane.INFORMATION_MESSAGE);
+
+            // Show leaderboard dialog
+            try {
+                var leaderboard = Database.getLeaderboard();
+                StringBuilder sb = new StringBuilder("<html><h2>Leaderboard</h2><ol>");
+                for (var entry : leaderboard) {
+                    sb.append("<li>").append(entry.displayName).append(" - ").append(entry.score).append("</li>");
+                }
+                sb.append("</ol></html>");
+
+                JOptionPane.showMessageDialog(this, sb.toString(), "Game Over - Leaderboard", JOptionPane.INFORMATION_MESSAGE);
+            } catch (SQLException ex) {
+                ex.printStackTrace();
+                JOptionPane.showMessageDialog(this, "Error fetching leaderboard.");
+            }
         }
     }
 
@@ -258,12 +217,7 @@ public class FlappyBird extends JPanel implements ActionListener, KeyListener {
     }
 
     @Override
-    public void keyTyped(KeyEvent e) {
-        // not used
-    }
-
+    public void keyTyped(KeyEvent e) {}
     @Override
-    public void keyReleased(KeyEvent e) {
-        // not used
-    }
+    public void keyReleased(KeyEvent e) {}
 }
